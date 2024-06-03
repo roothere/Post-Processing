@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class ASCII : MonoBehaviour {
     public Shader asciiShader;
-
+    public ComputeShader asciiCompute;
     public Texture asciiTex;
 
     public bool viewSobel = false;
