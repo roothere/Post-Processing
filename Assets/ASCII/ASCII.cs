@@ -5,15 +5,13 @@ using UnityEngine;
 public class ASCII : MonoBehaviour {
     public Shader asciiShader;
     public ComputeShader asciiCompute;
-    public Texture asciiTex;
+    public Texture asciiTex, edgeTex;
 
     public bool viewSobel = false;
     public bool viewDownscale1 = false;
     public bool viewDownscale2 = false;
     public bool viewDownscale3 = false;
-    
-    [Range(0.0f, 10.0f)]
-    public float gamma = 1.0f;
+    public bool viewQuantizedSobel = false;
 
     private Material asciiMat;
     
@@ -33,6 +31,8 @@ public class ASCII : MonoBehaviour {
         
         var luminance = RenderTexture.GetTemporary(source.width, source.height, 0, RenderTextureFormat.RHalf);
         var sobel = RenderTexture.GetTemporary(source.width, source.height, 0, source.format);
+        var quantizedSobel = RenderTexture.GetTemporary(source.width, source.height, 0, source.format);
+        quantizedSobel.enableRandomWrite = true;
 
         var downscale1 = RenderTexture.GetTemporary(source.width / 2, source.height / 2, 0, source.format);
         var downscale2 = RenderTexture.GetTemporary(source.width / 4, source.height / 4, 0, source.format);
@@ -51,6 +51,14 @@ public class ASCII : MonoBehaviour {
 
         Graphics.Blit(downscale3, destination, asciiMat, 5);
 
+        asciiCompute.SetTexture(0, "_SobelTex", sobel);
+        asciiCompute.SetTexture(0, "_Result", quantizedSobel);
+        asciiCompute.Dispatch(0, Mathf.CeilToInt(source.width / 8), Mathf.CeilToInt(source.width / 8), 1);
+        
+        asciiMat.SetTexture("_EdgeTex", edgeTex);
+        Graphics.Blit(quantizedSobel, destination, asciiMat, 5);
+
+
         if (viewSobel)
             Graphics.Blit(sobel, destination, asciiMat, 0);
 
@@ -60,6 +68,8 @@ public class ASCII : MonoBehaviour {
             Graphics.Blit(downscale2, destination, asciiMat, 0);
         if (viewDownscale3)
             Graphics.Blit(downscale3, destination, asciiMat, 0);
+        if (viewQuantizedSobel)
+            Graphics.Blit(quantizedSobel, destination, asciiMat, 0);
         
         // Graphics.Blit(downscale, destination, asciiMat, 5);
         
@@ -69,5 +79,6 @@ public class ASCII : MonoBehaviour {
         RenderTexture.ReleaseTemporary(ping);
         RenderTexture.ReleaseTemporary(luminance);
         RenderTexture.ReleaseTemporary(sobel);
+        RenderTexture.ReleaseTemporary(quantizedSobel);
     }
 }

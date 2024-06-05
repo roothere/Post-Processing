@@ -105,19 +105,7 @@ Shader "Hidden/ASCII" {
                 // if ((-3.0f * PI / 5.0f) < theta && theta < (-2.0 * PI / 5)) theta = 1;
                 // else theta = 0;
 
-
-                float absTheta = abs(theta) / PI;
-                float3 direction = 0.0f;
-                if ((0.45f < absTheta) && (absTheta < 0.55f)) direction = float3(0, 1, 0); // FLAT (Green)
-                else if ((0.0f <= absTheta) && (absTheta < 0.05f)) direction = float3(1, 0, 0); // VERTICAL (Red)
-                else if ((0.9f < absTheta) && (absTheta <= 1.0f)) direction = float3(1, 0, 0);
-                else if (0.05f < absTheta && absTheta < 0.45f) direction = float3(1, 1, 0); // DIAGONAL 1 (Yellow)
-                else if (0.55f < absTheta && absTheta < 0.9f) direction = float3(0, 1, 1); // DIAGONAL 2 (Cyan)
-                else direction = 0;
-
-                return float4(direction * (magnitude >= 0.01f), 1.0f);
-
-                return float4(G.x, G.y, saturate(magnitude), saturate((theta + PI) / (2.0f * PI)));
+                return float4(saturate(magnitude), theta, 1 - isnan(theta), 0);
             }
             ENDCG
         }
@@ -135,7 +123,7 @@ Shader "Hidden/ASCII" {
                 float4 nw = _MainTex.Sample(point_clamp_sampler, i.uv + float2(-1, 1) * _MainTex_TexelSize.xy);
                 float4 sw = _MainTex.Sample(point_clamp_sampler, i.uv + float2(1, 1) * _MainTex_TexelSize.xy);
 
-                return (ne + se + nw + sw) * float4(0, 1, 0, 0);
+                return ne;
             }
             ENDCG
         }
@@ -145,20 +133,19 @@ Shader "Hidden/ASCII" {
             #pragma vertex vp
             #pragma fragment fp
 
-            Texture2D _LuminanceTex;
+            Texture2D _EdgeTex;
 
             float4 fp(v2f i) : SV_Target {
-                float4 sobel = _MainTex.Sample(point_clamp_sampler, i.uv);
+                float quantizedAngle = _MainTex.Sample(point_clamp_sampler, i.uv).r;
 
-                return sobel;
+                float2 localUV;
+                localUV.x = (i.vertex.x % 8 / 40) + quantizedAngle;
+                localUV.y = (i.vertex.y % 8 / 8);
 
-                float angle = sobel.w;
+                float4 ascii = _EdgeTex.Sample(point_clamp_sampler, localUV);
 
-                return floor(angle * 2.0f) / 2.0f;
-                
+                return ascii;
 
-                
-                return float4(sobel.x, sobel.y, 0, 0);
             }
             ENDCG
         }
