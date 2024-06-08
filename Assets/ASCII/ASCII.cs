@@ -65,22 +65,23 @@ public class ASCII : MonoBehaviour {
         asciiMat.SetInt("_GaussianKernelSize", gaussianKernelSize);
         asciiMat.SetFloat("_Threshold", threshold);
         asciiMat.SetInt("_Invert", invert ? 1 : 0);
-        Graphics.Blit(luminance, ping, asciiMat, 2); // Horizontal Blur
-        Graphics.Blit(ping, dog, asciiMat, 3); // Vertical Blur and Difference
+        Graphics.Blit(luminance, ping, asciiMat, 3); // Horizontal Blur
+        Graphics.Blit(ping, dog, asciiMat, 4); // Vertical Blur and Difference
 
         asciiMat.SetTexture("_LuminanceTex", luminance);
-        Graphics.Blit(dog, ping, asciiMat, 4); // Sobel Horizontal Pass
+        Graphics.Blit(dog, ping, asciiMat, 5); // Sobel Horizontal Pass
         
-        Graphics.Blit(ping, sobel, asciiMat, 5); // Sobel Vertical Pass
+        Graphics.Blit(ping, sobel, asciiMat, 6); // Sobel Vertical Pass
 
-        var downscale1 = RenderTexture.GetTemporary(source.width / 2, source.height / 2, 0, RenderTextureFormat.RHalf);
-        var downscale2 = RenderTexture.GetTemporary(source.width / 4, source.height / 4, 0, RenderTextureFormat.RHalf);
-        var downscale3 = RenderTexture.GetTemporary(source.width / 8, source.height / 8, 0, RenderTextureFormat.RHalf);
+        Graphics.Blit(source, ping, asciiMat, 2); // Pack luminance
 
-        Graphics.Blit(luminance, downscale1, asciiMat, 0);
+        var downscale1 = RenderTexture.GetTemporary(source.width / 2, source.height / 2, 0, source.format);
+        var downscale2 = RenderTexture.GetTemporary(source.width / 4, source.height / 4, 0, source.format);
+        var downscale3 = RenderTexture.GetTemporary(source.width / 8, source.height / 8, 0, source.format);
+
+        Graphics.Blit(ping, downscale1, asciiMat, 0);
         Graphics.Blit(downscale1, downscale2, asciiMat, 0);
         Graphics.Blit(downscale2, downscale3, asciiMat, 0);
-
 
         asciiCompute.SetTexture(0, "_SobelTex", sobel);
         asciiCompute.SetTexture(0, "_Result", edgeAscii);

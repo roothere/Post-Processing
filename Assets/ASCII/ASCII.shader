@@ -9,7 +9,7 @@ Shader "Hidden/ASCII" {
         #include "UnityCG.cginc"
         #define PI 3.14159265358979323846f
 
-        Texture2D _MainTex, _AsciiTex;
+        Texture2D _MainTex, _AsciiTex, _LuminanceTex;
         float4 _MainTex_TexelSize;
         SamplerState point_clamp_sampler, linear_clamp_sampler;
 
@@ -66,6 +66,20 @@ Shader "Hidden/ASCII" {
                 float lum = luminance(col.rgb);
 
                 return lum;
+            }
+            ENDCG
+        }
+
+        Pass { // Pack luminance
+            CGPROGRAM
+            #pragma vertex vp
+            #pragma fragment fp
+
+            float4 fp(v2f i) : SV_Target {
+                float3 col = saturate(_MainTex.Sample(point_clamp_sampler, i.uv));
+                float lum = _LuminanceTex.Sample(point_clamp_sampler, i.uv);
+
+                return float4(col, lum);
             }
             ENDCG
         }
@@ -144,8 +158,6 @@ Shader "Hidden/ASCII" {
             CGPROGRAM
             #pragma vertex vp
             #pragma fragment fp
-
-            Texture2D _LuminanceTex;
 
             float4 fp(v2f i) : SV_Target {
                 float2 grad1 = _MainTex.Sample(point_clamp_sampler, i.uv - float2(0, 1) * _MainTex_TexelSize.xy).xy;
