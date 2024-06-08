@@ -1,21 +1,20 @@
-#pragma kernel CSMain
+#pragma kernel CS_DrawEdges
 
 #define PI 3.14159265358979323846f
 
-Texture2D<float4> _SobelTex, _EdgeTex;
+Texture2D<float4> _SobelTex, _EdgeAsciiTex, _AsciiTex, _LuminanceTex;
 RWTexture2D<float4> _Result;
 SamplerState point_clamp_sampler;
 
-uint _ViewUncompressed, _DebugEdges, _Grid, _EdgeThreshold;
+uint _ViewUncompressed, _DebugEdges, _Grid, _EdgeThreshold, _NoEdges;
 
 
 groupshared int edgeCount[64];
 
 [numthreads(8,8,1)]
-void CSMain (uint3 id : SV_DispatchThreadID, uint3 gid : SV_GROUPTHREADID) {
+void CS_DrawEdges(uint3 id : SV_DISPATCHTHREADID, uint3 gid : SV_GROUPTHREADID) {
+    // Initialize groupshared memory
     edgeCount[gid.x + gid.y * 8] = 0;
-
-    int grid = (gid.y == 0) + (gid.x == 0);
 
     float3 sobel = _SobelTex[id.xy].xyz;
 
@@ -24,7 +23,10 @@ void CSMain (uint3 id : SV_DispatchThreadID, uint3 gid : SV_GROUPTHREADID) {
     float absTheta = abs(theta) / PI;
     
     int direction = -1;
+
+    // Check nan mask first
     if (any(sobel.z)) {
+        // Quantize angle to edge direction
         if ((0.0f <= absTheta) && (absTheta < 0.05f)) direction = 0; // VERTICAL
         else if ((0.9f < absTheta) && (absTheta <= 1.0f)) direction = 0;
         else if ((0.45f < absTheta) && (absTheta < 0.55f)) direction = 1; // HORIZONTAL
@@ -32,6 +34,7 @@ void CSMain (uint3 id : SV_DispatchThreadID, uint3 gid : SV_GROUPTHREADID) {
         else if (0.55f < absTheta && absTheta < 0.9f) direction = sign(theta) > 0 ? 3 : 2; // DIAGONAL 2
     }
 
+    // Set group thread bucket to direction
     edgeCount[gid.x + gid.y * 8] = direction;
 
     GroupMemoryBarrierWithGroupSync();
@@ -40,11 +43,14 @@ void CSMain (uint3 id : SV_DispatchThreadID, uint3 gid : SV_GROUPTHREADID) {
     if ((gid.x == 0) && (gid.y == 0)) {
         uint buckets[4] = {0, 0, 0, 0};
 
+        // Count up directions in tile
         for (int i = 0; i < 64; ++i) {
             buckets[edgeCount[i]] += 1;
         }
 
         uint maxValue = 0;
+
+        // Scan for most common edge direction (max)
         for (int j = 0; j < 4; ++j) {
             if (buckets[j] > maxValue) {
                 commonEdgeIndex = j;
@@ -52,6 +58,7 @@ void CSMain (uint3 id : SV_DispatchThreadID, uint3 gid : SV_GROUPTHREADID) {
             }
         }
 
+        // Discard edge info if not enough edge pixels in tile
         if (maxValue < _EdgeThreshold) commonEdgeIndex = -1;
 
         edgeCount[0] = commonEdgeIndex;
@@ -69,15 +76,36 @@ void CSMain (uint3 id : SV_DispatchThreadID, uint3 gid : SV_GROUPTHREADID) {
 
     float4 quantizedEdge = (commonEdgeIndex + 1) * 8;
 
+    // Calculate edge texture UV from global thread id and edge direction
     float2 localUV;
     localUV.x = ((id.x % 8)) + quantizedEdge.x;
     localUV.y = 8 - (id.y % 8);
 
-    float4 ascii = _EdgeTex[localUV];
+    float4 ascii = _EdgeAsciiTex[localUV];
 
     if (_ViewUncompressed) ascii = (commonEdgeIndex + 1) / 5.0f;
     if (_DebugEdges) ascii = float4(debugEdge, 1.0f);
+    
+    int grid = (gid.y == 0) + (gid.x == 0);
     if (_Grid) ascii += grid;
 
-    _Result[id.xy] = ascii;
+    if (saturate(commonEdgeIndex + 1) && !_NoEdges) {
+        // Output edge ASCII and edge mask
+        _Result[id.xy] = float4(ascii.xyz, saturate(commonEdgeIndex));
+    } else {
+        // No edge here, blend luminance based ASCII
+
+        uint2 luminanceID = id.xy / 8;
+
+        float luminance = _LuminanceTex[luminanceID].r;
+
+        luminance = floor(luminance * 10) / 10.0f;
+        
+        localUV.x = ((id.x % 8)) + luminance * 80;
+        localUV.y = (id.y % 8);
+
+        float ascii = _AsciiTex[localUV].r;
+
+        _Result[id.xy] = luminance;
+    }
 }

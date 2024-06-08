@@ -111,24 +111,24 @@ Shader "Hidden/ASCII" {
         }
 
 
-        Pass { // Quantize
+        Pass { // Luminance to ASCII
             CGPROGRAM
             #pragma vertex vp
             #pragma fragment fp
 
+            Texture2D _EdgeMaskTex, _LuminanceTex;
+
             float4 fp(v2f i) : SV_Target {
-                float4 col = _MainTex.Sample(point_clamp_sampler, i.uv);
+                float4 col = _LuminanceTex.Sample(point_clamp_sampler, i.uv);
                 col.r = floor(col.r * 10) / 10;
 
                 float2 localUV;
                 localUV.x = (i.vertex.x % 8 / 80) + col.r;
                 localUV.y = (i.vertex.y % 8 / 8);
 
-                float4 ascii = _AsciiTex.Sample(point_clamp_sampler, localUV) * col;
+                float4 ascii = _AsciiTex.Sample(point_clamp_sampler, localUV);
 
                 return ascii;
-
-                return localUV.x * col + localUV.y * col;
             }
             ENDCG
         }
