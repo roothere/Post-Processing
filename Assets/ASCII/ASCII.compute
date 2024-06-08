@@ -97,15 +97,15 @@ void CS_DrawEdges(uint3 id : SV_DISPATCHTHREADID, uint3 gid : SV_GROUPTHREADID) 
 
         uint2 luminanceID = id.xy / 8;
 
-        float luminance = _LuminanceTex[luminanceID].r;
+        float luminance = saturate(pow((_LuminanceTex[luminanceID].r) * 2.5f, 0.45f));
 
-        luminance = floor(luminance * 10) / 10.0f;
+        luminance = max(0, (floor(luminance * 10) - 1)) / 10.0f;
         
         localUV.x = ((id.x % 8)) + luminance * 80;
         localUV.y = (id.y % 8);
 
         float ascii = _AsciiTex[localUV].r;
 
-        _Result[id.xy] = luminance;
+        _Result[id.xy] = ascii;
     }
 }

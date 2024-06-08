@@ -13,6 +13,9 @@ Shader "Hidden/ASCII" {
         float4 _MainTex_TexelSize;
         SamplerState point_clamp_sampler, linear_clamp_sampler;
 
+        float _Sigma, _K, _Tau, _Threshold;
+        int _GaussianKernelSize, _Invert;
+
         struct VertexData {
             float4 vertex : POSITION;
             float2 uv : TEXCOORD0;
@@ -32,6 +35,10 @@ Shader "Hidden/ASCII" {
 
         float luminance(float3 color) {
             return dot(color, float3(0.299f, 0.587f, 0.114f));
+        }
+
+        float gaussian(float sigma, float pos) {
+            return (1.0f / sqrt(2.0f * PI * sigma * sigma)) * exp(-(pos * pos) / (2.0f * sigma * sigma));
         }
 
         ENDCG
@@ -59,6 +66,58 @@ Shader "Hidden/ASCII" {
                 float lum = luminance(col.rgb);
 
                 return lum;
+            }
+            ENDCG
+        }
+
+        Pass { // Horizontal Blur
+            CGPROGRAM
+            #pragma vertex vp
+            #pragma fragment fp
+
+            float4 fp(v2f i) : SV_Target {
+                float2 blur = 0;
+                float2 kernelSum = 0;
+
+                for (int x = -_GaussianKernelSize; x <= _GaussianKernelSize; ++x) {
+                    float2 luminance = _MainTex.Sample(point_clamp_sampler, i.uv + float2(x, 0) * _MainTex_TexelSize.xy).r;
+                    float2 gauss = float2(gaussian(_Sigma, x), gaussian(_Sigma * _K, x));
+
+                    blur += luminance * gauss;
+                    kernelSum += gauss;
+                }
+
+                return float4(blur / kernelSum, 0, 0);
+            }
+            ENDCG
+        }
+
+        Pass { // Vertical Blur and Difference
+            CGPROGRAM
+            #pragma vertex vp
+            #pragma fragment fp
+
+            float fp(v2f i) : SV_Target {
+                float2 blur = 0;
+                float2 kernelSum = 0;
+
+                for (int y = -_GaussianKernelSize; y <= _GaussianKernelSize; ++y) {
+                    float2 luminance = _MainTex.Sample(point_clamp_sampler, i.uv + float2(0, y) * _MainTex_TexelSize.xy).rg;
+                    float2 gauss = float2(gaussian(_Sigma, y), gaussian(_Sigma * _K, y));
+
+                    blur += luminance * gauss;
+                    kernelSum += gauss;
+                }
+
+                blur = blur / kernelSum;
+
+                float4 D = (blur.x - _Tau * blur.y);
+
+                D = (D >= _Threshold) ? 1 : 0;
+
+                if (_Invert) D = 1 - D;
+
+                return D;
             }
             ENDCG
         }
@@ -106,29 +165,6 @@ Shader "Hidden/ASCII" {
                 // else theta = 0;
 
                 return float4(saturate(magnitude), theta, 1 - isnan(theta), 0);
-            }
-            ENDCG
-        }
-
-
-        Pass { // Luminance to ASCII
-            CGPROGRAM
-            #pragma vertex vp
-            #pragma fragment fp
-
-            Texture2D _EdgeMaskTex, _LuminanceTex;
-
-            float4 fp(v2f i) : SV_Target {
-                float4 col = _LuminanceTex.Sample(point_clamp_sampler, i.uv);
-                col.r = floor(col.r * 10) / 10;
-
-                float2 localUV;
-                localUV.x = (i.vertex.x % 8 / 80) + col.r;
-                localUV.y = (i.vertex.y % 8 / 8);
-
-                float4 ascii = _AsciiTex.Sample(point_clamp_sampler, localUV);
-
-                return ascii;
             }
             ENDCG
         }

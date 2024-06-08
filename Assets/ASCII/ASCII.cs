@@ -7,6 +7,24 @@ public class ASCII : MonoBehaviour {
     public ComputeShader asciiCompute;
     public Texture asciiTex, edgeTex;
 
+    [Range(1, 10)]
+    public int gaussianKernelSize = 2;
+
+    [Range(0.1f, 5.0f)]
+    public float stdev = 2.0f;
+
+    [Range(0.1f, 5.0f)]
+    public float stdevScale = 1.6f;
+
+    [Range(0.01f, 5.0f)]
+    public float tau = 1.0f;
+
+    [Range(0.001f, 0.1f)]
+    public float threshold = 0.005f;
+
+    public bool invert = false;
+
+    public bool viewDog = false;
     public bool viewSobel = false;
     public bool viewGrid = false;
     public bool debugEdges = false;
@@ -35,15 +53,25 @@ public class ASCII : MonoBehaviour {
         
         var luminance = RenderTexture.GetTemporary(source.width, source.height, 0, RenderTextureFormat.RHalf);
         var sobel = RenderTexture.GetTemporary(source.width, source.height, 0, source.format);
+        var dog = RenderTexture.GetTemporary(source.width, source.height, 0, source.format);
         var edgeAscii = RenderTexture.GetTemporary(source.width, source.height, 0, source.format);
         edgeAscii.enableRandomWrite = true;
         
         Graphics.Blit(source, luminance, asciiMat, 1); // Luminance
 
+        asciiMat.SetFloat("_K", stdevScale);
+        asciiMat.SetFloat("_Sigma", stdev);
+        asciiMat.SetFloat("_Tau", tau);
+        asciiMat.SetInt("_GaussianKernelSize", gaussianKernelSize);
+        asciiMat.SetFloat("_Threshold", threshold);
+        asciiMat.SetInt("_Invert", invert ? 1 : 0);
+        Graphics.Blit(luminance, ping, asciiMat, 2); // Horizontal Blur
+        Graphics.Blit(ping, dog, asciiMat, 3); // Vertical Blur and Difference
+
         asciiMat.SetTexture("_LuminanceTex", luminance);
-        Graphics.Blit(luminance, ping, asciiMat, 2); // Sobel Horizontal Pass
+        Graphics.Blit(dog, ping, asciiMat, 4); // Sobel Horizontal Pass
         
-        Graphics.Blit(ping, sobel, asciiMat, 3); // Sobel Vertical Pass
+        Graphics.Blit(ping, sobel, asciiMat, 5); // Sobel Vertical Pass
 
         var downscale1 = RenderTexture.GetTemporary(source.width / 2, source.height / 2, 0, RenderTextureFormat.RHalf);
         var downscale2 = RenderTexture.GetTemporary(source.width / 4, source.height / 4, 0, RenderTextureFormat.RHalf);
@@ -69,6 +97,9 @@ public class ASCII : MonoBehaviour {
         Graphics.Blit(edgeAscii, destination);
 
 
+        if (viewDog)
+            Graphics.Blit(dog, destination, asciiMat, 0);
+
         if (viewSobel)
             Graphics.Blit(sobel, destination, asciiMat, 0);
 
@@ -83,5 +114,6 @@ public class ASCII : MonoBehaviour {
         RenderTexture.ReleaseTemporary(downscale1);
         RenderTexture.ReleaseTemporary(downscale2);
         RenderTexture.ReleaseTemporary(downscale3);
+        RenderTexture.ReleaseTemporary(dog);
     }
 }
