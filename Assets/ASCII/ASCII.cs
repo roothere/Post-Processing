@@ -8,10 +8,13 @@ public class ASCII : MonoBehaviour {
     public Texture asciiTex, edgeTex;
 
     public bool viewSobel = false;
-    public bool viewDownscale1 = false;
-    public bool viewDownscale2 = false;
-    public bool viewDownscale3 = false;
+    public bool viewGrid = false;
+    public bool debugEdges = false;
+    public bool viewUncompressedEdges = false;
     public bool viewQuantizedSobel = false;
+
+    [Range(0, 64)]
+    public int edgeThreshold = 8;
 
     private Material asciiMat;
     
@@ -33,10 +36,6 @@ public class ASCII : MonoBehaviour {
         var sobel = RenderTexture.GetTemporary(source.width, source.height, 0, source.format);
         var quantizedSobel = RenderTexture.GetTemporary(source.width, source.height, 0, source.format);
         quantizedSobel.enableRandomWrite = true;
-
-        var downscale1 = RenderTexture.GetTemporary(source.width / 2, source.height / 2, 0, source.format);
-        var downscale2 = RenderTexture.GetTemporary(source.width / 4, source.height / 4, 0, source.format);
-        var downscale3 = RenderTexture.GetTemporary(source.width / 8, source.height / 8, 0, source.format);
         
         Graphics.Blit(source, luminance, asciiMat, 1); // Luminance
 
@@ -45,37 +44,25 @@ public class ASCII : MonoBehaviour {
         
         Graphics.Blit(ping, sobel, asciiMat, 3); // Sobel Vertical Pass
 
-        Graphics.Blit(sobel, downscale1, asciiMat, 4);
-        Graphics.Blit(downscale1, downscale2, asciiMat, 4);
-        Graphics.Blit(downscale2, downscale3, asciiMat, 4);
-
-        Graphics.Blit(downscale3, destination, asciiMat, 5);
-
         asciiCompute.SetTexture(0, "_SobelTex", sobel);
         asciiCompute.SetTexture(0, "_Result", quantizedSobel);
+        asciiCompute.SetTexture(0, "_EdgeTex", edgeTex);
+        asciiCompute.SetInt("_ViewUncompressed", viewUncompressedEdges ? 1 : 0);
+        asciiCompute.SetInt("_DebugEdges", debugEdges ? 1 : 0);
+        asciiCompute.SetInt("_Grid", viewGrid ? 1 : 0);
+        asciiCompute.SetInt("_EdgeThreshold", edgeThreshold);
         asciiCompute.Dispatch(0, Mathf.CeilToInt(source.width / 8), Mathf.CeilToInt(source.width / 8), 1);
         
-        asciiMat.SetTexture("_EdgeTex", edgeTex);
-        Graphics.Blit(quantizedSobel, destination, asciiMat, 5);
+        Graphics.Blit(quantizedSobel, destination);
 
 
         if (viewSobel)
             Graphics.Blit(sobel, destination, asciiMat, 0);
 
-        if (viewDownscale1)
-            Graphics.Blit(downscale1, destination, asciiMat, 0);
-        if (viewDownscale2)
-            Graphics.Blit(downscale2, destination, asciiMat, 0);
-        if (viewDownscale3)
-            Graphics.Blit(downscale3, destination, asciiMat, 0);
-        if (viewQuantizedSobel)
+        if (viewQuantizedSobel || viewUncompressedEdges || debugEdges || viewGrid)
             Graphics.Blit(quantizedSobel, destination, asciiMat, 0);
         
-        // Graphics.Blit(downscale, destination, asciiMat, 5);
         
-        RenderTexture.ReleaseTemporary(downscale1);
-        RenderTexture.ReleaseTemporary(downscale2);
-        RenderTexture.ReleaseTemporary(downscale3);
         RenderTexture.ReleaseTemporary(ping);
         RenderTexture.ReleaseTemporary(luminance);
         RenderTexture.ReleaseTemporary(sobel);

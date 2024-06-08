@@ -110,45 +110,6 @@ Shader "Hidden/ASCII" {
             ENDCG
         }
 
-        Pass { // Downsample edge information
-            CGPROGRAM
-            #pragma vertex vp
-            #pragma fragment fp
-
-            float4 fp(v2f i) : SV_Target {
-                float angleSum = 0.0f;
-
-                float4 ne = _MainTex.Sample(point_clamp_sampler, i.uv + float2(-1, -1) * _MainTex_TexelSize.xy);
-                float4 se = _MainTex.Sample(point_clamp_sampler, i.uv + float2(1, -1) * _MainTex_TexelSize.xy);
-                float4 nw = _MainTex.Sample(point_clamp_sampler, i.uv + float2(-1, 1) * _MainTex_TexelSize.xy);
-                float4 sw = _MainTex.Sample(point_clamp_sampler, i.uv + float2(1, 1) * _MainTex_TexelSize.xy);
-
-                return ne;
-            }
-            ENDCG
-        }
-
-        Pass { // upscale and draw edges
-            CGPROGRAM
-            #pragma vertex vp
-            #pragma fragment fp
-
-            Texture2D _EdgeTex;
-
-            float4 fp(v2f i) : SV_Target {
-                float quantizedAngle = _MainTex.Sample(point_clamp_sampler, i.uv).r;
-
-                float2 localUV;
-                localUV.x = (i.vertex.x % 8 / 40) + quantizedAngle;
-                localUV.y = (i.vertex.y % 8 / 8);
-
-                float4 ascii = _EdgeTex.Sample(point_clamp_sampler, localUV);
-
-                return ascii;
-
-            }
-            ENDCG
-        }
 
         Pass { // Quantize
             CGPROGRAM

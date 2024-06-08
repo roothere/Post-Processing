@@ -2,8 +2,11 @@
 
 #define PI 3.14159265358979323846f
 
-Texture2D<float4> _SobelTex;
+Texture2D<float4> _SobelTex, _EdgeTex;
 RWTexture2D<float4> _Result;
+SamplerState point_clamp_sampler;
+
+uint _ViewUncompressed, _DebugEdges, _Grid, _EdgeThreshold;
 
 
 groupshared int edgeCount[64];
@@ -49,12 +52,14 @@ void CSMain (uint3 id : SV_DispatchThreadID, uint3 gid : SV_GROUPTHREADID) {
             }
         }
 
+        if (maxValue < _EdgeThreshold) commonEdgeIndex = -1;
+
         edgeCount[0] = commonEdgeIndex;
     }
 
     GroupMemoryBarrierWithGroupSync();
 
-    commonEdgeIndex = edgeCount[0];
+    commonEdgeIndex = _ViewUncompressed ? direction : edgeCount[0];
 
     float3 debugEdge = 0;
     if (commonEdgeIndex == 0) debugEdge = float3(1, 0, 0);
@@ -62,8 +67,17 @@ void CSMain (uint3 id : SV_DispatchThreadID, uint3 gid : SV_GROUPTHREADID) {
     if (commonEdgeIndex == 2) debugEdge = float3(0, 1, 1);
     if (commonEdgeIndex == 3) debugEdge = float3(1, 1, 0);
 
-    float quantizedEdge = (commonEdgeIndex + 1) / 5.0f;
+    float4 quantizedEdge = (commonEdgeIndex + 1) * 8;
 
-    // _Result[id.xy] = float4(debugEdge, 1.0f) + grid * 0.1f;
-    _Result[id.xy] = quantizedEdge;
+    float2 localUV;
+    localUV.x = ((id.x % 8)) + quantizedEdge.x;
+    localUV.y = 8 - (id.y % 8);
+
+    float4 ascii = _EdgeTex[localUV];
+
+    if (_ViewUncompressed) ascii = (commonEdgeIndex + 1) / 5.0f;
+    if (_DebugEdges) ascii = float4(debugEdge, 1.0f);
+    if (_Grid) ascii += grid;
+
+    _Result[id.xy] = ascii;
 }
