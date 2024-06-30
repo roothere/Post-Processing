@@ -175,8 +175,7 @@ Shader "Hidden/ASCII" {
 
                 // if ((-3.0f * PI / 5.0f) < theta && theta < (-2.0 * PI / 5)) theta = 1;
                 // else theta = 0;
-
-                return float4(saturate(magnitude), theta, 1 - isnan(theta), 0);
+                return float4(max(0.0f, magnitude), theta, 1 - isnan(theta), 0);
             }
             ENDCG
         }

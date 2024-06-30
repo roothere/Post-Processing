@@ -31,15 +31,39 @@ public class ASCII : MonoBehaviour {
     public bool viewUncompressedEdges = false;
     public bool viewQuantizedSobel = false;
     public bool noEdges = false;
+    public bool noFill = false;
 
     [Range(0, 64)]
     public int edgeThreshold = 8;
 
+    [Range(0.0f, 10.0f)]
+    public float exposure = 1.0f;
+    
+    [Range(0.0f, 10.0f)]
+    public float attenuation = 1.0f;
+
     private Material asciiMat;
+    private RenderTexture asciiRenderTex;
+    private int counter;
+    private float t;
     
     void OnEnable() {
         asciiMat = new Material(asciiShader);
         asciiMat.hideFlags = HideFlags.HideAndDontSave;
+
+        if (asciiRenderTex == null) {
+            asciiRenderTex = new RenderTexture(Screen.width, Screen.height, 0, RenderTextureFormat.ARGB32);
+            asciiRenderTex.enableRandomWrite = true;
+            asciiRenderTex.Create();
+        }
+    }
+
+    void Update() {
+        if (asciiRenderTex == null || Screen.width != asciiRenderTex.width || Screen.height != asciiRenderTex.height) {
+            asciiRenderTex = new RenderTexture(Screen.width, Screen.height, 0, RenderTextureFormat.ARGB32);
+            asciiRenderTex.enableRandomWrite = true;
+            asciiRenderTex.Create();
+        }
     }
 
     void OnDisable() {
@@ -54,8 +78,6 @@ public class ASCII : MonoBehaviour {
         var luminance = RenderTexture.GetTemporary(source.width, source.height, 0, RenderTextureFormat.RHalf);
         var sobel = RenderTexture.GetTemporary(source.width, source.height, 0, source.format);
         var dog = RenderTexture.GetTemporary(source.width, source.height, 0, source.format);
-        var edgeAscii = RenderTexture.GetTemporary(source.width, source.height, 0, source.format);
-        edgeAscii.enableRandomWrite = true;
         
         Graphics.Blit(source, luminance, asciiMat, 1); // Luminance
 
@@ -84,7 +106,7 @@ public class ASCII : MonoBehaviour {
         Graphics.Blit(downscale2, downscale3, asciiMat, 0);
 
         asciiCompute.SetTexture(0, "_SobelTex", sobel);
-        asciiCompute.SetTexture(0, "_Result", edgeAscii);
+        asciiCompute.SetTexture(0, "_Result", asciiRenderTex);
         asciiCompute.SetTexture(0, "_EdgeAsciiTex", edgeTex);
         asciiCompute.SetTexture(0, "_AsciiTex", asciiTex);
         asciiCompute.SetTexture(0, "_LuminanceTex", downscale3);
@@ -92,10 +114,14 @@ public class ASCII : MonoBehaviour {
         asciiCompute.SetInt("_DebugEdges", debugEdges ? 1 : 0);
         asciiCompute.SetInt("_Grid", viewGrid ? 1 : 0);
         asciiCompute.SetInt("_NoEdges", noEdges ? 1 : 0);
+        asciiCompute.SetInt("_NoFill", noFill ? 1 : 0);
         asciiCompute.SetInt("_EdgeThreshold", edgeThreshold);
+        asciiCompute.SetFloat("_Exposure", exposure);
+        asciiCompute.SetFloat("_Attenuation", attenuation);
         asciiCompute.Dispatch(0, Mathf.CeilToInt(source.width / 8), Mathf.CeilToInt(source.width / 8), 1);
         
-        Graphics.Blit(edgeAscii, destination);
+    
+        Graphics.Blit(asciiRenderTex, destination);
 
 
         if (viewDog)
@@ -105,13 +131,12 @@ public class ASCII : MonoBehaviour {
             Graphics.Blit(sobel, destination, asciiMat, 0);
 
         if (viewQuantizedSobel || viewUncompressedEdges || debugEdges || viewGrid)
-            Graphics.Blit(edgeAscii, destination, asciiMat, 0);
+            Graphics.Blit(asciiRenderTex, destination, asciiMat, 0);
         
         
         RenderTexture.ReleaseTemporary(ping);
         RenderTexture.ReleaseTemporary(luminance);
         RenderTexture.ReleaseTemporary(sobel);
-        RenderTexture.ReleaseTemporary(edgeAscii);
         RenderTexture.ReleaseTemporary(downscale1);
         RenderTexture.ReleaseTemporary(downscale2);
         RenderTexture.ReleaseTemporary(downscale3);

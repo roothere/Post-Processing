@@ -6,7 +6,8 @@ Texture2D<float4> _SobelTex, _EdgeAsciiTex, _AsciiTex, _LuminanceTex;
 RWTexture2D<float4> _Result;
 SamplerState point_clamp_sampler;
 
-uint _ViewUncompressed, _DebugEdges, _Grid, _EdgeThreshold, _NoEdges;
+uint _ViewUncompressed, _DebugEdges, _Grid, _EdgeThreshold, _NoEdges, _NoFill;
+float _Exposure, _Attenuation;
 
 
 groupshared int edgeCount[64];
@@ -84,12 +85,12 @@ void CS_DrawEdges(uint3 id : SV_DISPATCHTHREADID, uint3 gid : SV_GROUPTHREADID) 
         localUV.y = 8 - (id.y % 8);
 
         ascii = _EdgeAsciiTex[localUV].r;
-    } else {
+    } else if (!_NoFill) {
         // No edge here, blend luminance based ASCII
 
         uint2 luminanceID = id.xy / 8;
 
-        float luminance = saturate(pow(abs((_LuminanceTex[luminanceID].w) * 2.5f), 0.45f));
+        float luminance = saturate(pow(abs((_LuminanceTex[luminanceID].w) * _Exposure), _Attenuation));
 
         luminance = max(0, (floor(luminance * 10) - 1)) / 10.0f;
         
@@ -100,12 +101,14 @@ void CS_DrawEdges(uint3 id : SV_DISPATCHTHREADID, uint3 gid : SV_GROUPTHREADID) 
         ascii = _AsciiTex[localUV].r;
     }
 
+    float3 col = _LuminanceTex[id.xy / 8].rgb;
+    // ascii.rgb *= col;
 
     if (_ViewUncompressed) ascii = (commonEdgeIndex + 1) / 5.0f;
     if (_DebugEdges) ascii = float4(debugEdge, 1.0f);
     
     int grid = (gid.y == 0) + (gid.x == 0);
-    if (_Grid) ascii += grid;
+    if (_Grid) ascii += grid * 0.5f;
 
-    _Result[id.xy] = _LuminanceTex[id.xy / 8] * ascii;
+    _Result[id.xy] = ascii;
 }
